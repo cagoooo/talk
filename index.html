@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini TTS 雙人對話語音生成器</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans TC', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 30px auto;
+      background: rgba(255, 255, 255, 0.98);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px;
+      color: white;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 20px 20px;
+      animation: drift 20s linear infinite;
+    }
+
+    @keyframes drift {
+      from { transform: translate(0, 0); }
+      to { transform: translate(20px, 20px); }
+    }
+
+    .header h1 { font-size: 2.3em; margin-bottom: 10px; font-weight: 700; position: relative; z-index: 1; }
+    .header p { opacity: 0.95; font-size: 1.05em; position: relative; z-index: 1; }
+
+    .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.25);
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      margin-top: 8px;
+      backdrop-filter: blur(10px);
+      position: relative;
+      z-index: 1;
+    }
+
+    .content { padding: 32px 36px; }
+
+    /* API Key */
+    .api-key-section {
+      background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);
+      border: 1px solid #ffe8a1;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin-bottom: 22px;
+    }
+
+    .api-key-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .api-key-title { font-weight: 600; color: #856404; font-size: 14px; }
+    .api-key-link { color: #667eea; text-decoration: none; font-size: 13px; font-weight: 500; }
+    .api-key-link:hover { text-decoration: underline; }
+
+    .api-key-input-row { display: flex; gap: 8px; align-items: center; }
+
+    .api-key-input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 1px solid #ffd966;
+      border-radius: 10px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, monospace;
+      background: white;
+    }
+
+    .api-key-input:focus { outline: none; border-color: #667eea; }
+
+    .toggle-visibility {
+      padding: 10px 14px;
+      background: white;
+      border: 1px solid #ffd966;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .api-key-status { font-size: 12px; color: #856404; margin-top: 8px; }
+    .api-key-status.saved { color: #155724; }
+
+    /* Section 標題 */
+    .section-title {
+      font-weight: 700;
+      color: #333;
+      font-size: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    /* 源文本來源區 */
+    .source-section {
+      background: linear-gradient(135deg, #f0fff4 0%, #f8fff8 100%);
+      border: 2px solid #c8edd6;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+
+    .source-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid #d0e8d8;
+      padding-bottom: 12px;
+    }
+
+    .tab-btn {
+      padding: 8px 18px;
+      border-radius: 10px;
+      border: 1.5px solid #c8edd6;
+      background: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      color: #555;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      border-color: transparent;
+      box-shadow: 0 4px 12px rgba(72, 187, 120, 0.3);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .source-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 14px 18px;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.6;
+      background: white;
+    }
+
+    .source-textarea:focus { outline: none; border-color: #48bb78; }
+
+    .pdf-drop-zone {
+      border: 2.5px dashed #a0d8a5;
+      border-radius: 14px;
+      padding: 30px 20px;
+      text-align: center;
+      background: white;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+
+    .pdf-drop-zone:hover, .pdf-drop-zone.drag-over {
+      border-color: #48bb78;
+      background: #f0fff4;
+    }
+
+    .pdf-drop-zone .icon { font-size: 36px; margin-bottom: 8px; }
+    .pdf-drop-zone .title { font-weight: 600; color: #333; margin-bottom: 4px; }
+    .pdf-drop-zone .hint { font-size: 12px; color: #888; }
+
+    .pdf-info {
+      background: #f0fff4;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: #2f855a;
+      display: none;
+    }
+
+    .pdf-info.show { display: block; }
+
+    .btn-ai {
+      background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+      color: white;
+      width: 100%;
+      padding: 14px;
+      margin-top: 14px;
+      font-size: 15px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    .btn-ai:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(72, 187, 120, 0.4);
+    }
+
+    .btn-ai:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    /* 角色設定 */
+    .characters-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .character-card {
+      border-radius: 16px;
+      padding: 20px;
+      position: relative;
+      transition: all 0.3s;
+      border: 2px solid transparent;
+    }
+
+    .character-card.char-a {
+      background: linear-gradient(135deg, #e8f0ff 0%, #f0f5ff 100%);
+      border-color: #c7d6ff;
+    }
+
+    .character-card.char-b {
+      background: linear-gradient(135deg, #ffe8f0 0%, #fff0f5 100%);
+      border-color: #ffc7d6;
+    }
+
+    .character-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    }
+
+    .char-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    .char-a .char-avatar { background: linear-gradient(135deg, #667eea 0%, #4c63d2 100%); }
+    .char-b .char-avatar { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+
+    .char-field { margin-bottom: 12px; }
+
+    .char-field label {
+      font-size: 12px;
+      color: #666;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .char-name-input, .char-voice-select {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: white;
+    }
+
+    .char-name-input { font-weight: 600; }
+
+    .char-name-input:focus, .char-voice-select:focus { outline: none; border-color: #667eea; }
+
+    .char-preview {
+      background: rgba(255,255,255,0.7);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.5;
+    }
+
+    /* 對話輸入 */
+    .input-section { margin-bottom: 20px; }
+
+    .input-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .input-label span { font-weight: 600; color: #333; font-size: 15px; }
+    .input-label .counter {
+      color: #888;
+      font-size: 12px;
+      background: #f0f2f5;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+
+    textarea#input {
+      width: 100%;
+      min-height: 180px;
+      padding: 16px 20px;
+      border: 2px solid #e8e8e8;
+      border-radius: 14px;
+      font-size: 15px;
+      font-family: inherit;
+      resize: vertical;
+      line-height: 1.8;
+      transition: all 0.3s;
+      background: #fafbfc;
+    }
+
+    textarea#input:focus {
+      outline: none;
+      border-color: #667eea;
+      background: white;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .format-hint {
+      background: linear-gradient(135deg, #f3f4ff 0%, #faf5ff 100%);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.6;
+      margin-top: 10px;
+      border-left: 3px solid #667eea;
+    }
+
+    .format-hint code {
+      background: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .sample-btn {
+      background: none;
+      border: none;
+      color: #667eea;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 0;
+      text-decoration: underline;
+    }
+
+    /* 對話預覽 (勾選) */
+    .dialogue-preview {
+      margin-top: 14px;
+      background: #f8f9fc;
+      border: 1px solid #e0e4ec;
+      border-radius: 14px;
+      padding: 16px;
+      display: none;
+    }
+
+    .dialogue-preview.show { display: block; animation: fadeIn 0.3s; }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .preview-title {
+      font-weight: 600;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .preview-title .count-badge {
+      background: #667eea;
+      color: white;
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-size: 12px;
+      margin-left: 6px;
+    }
+
+    .preview-controls {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-mini {
+      padding: 6px 12px;
+      border: 1px solid #ccd4e0;
+      background: white;
+      border-radius: 8px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #555;
+      font-weight: 500;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .btn-mini:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .preview-list {
+      max-height: 280px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .preview-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: white;
+      border-radius: 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .preview-item:hover { background: #f0f5ff; }
+
+    .preview-item.char-a-item { border-left-color: #667eea; }
+    .preview-item.char-b-item { border-left-color: #f5576c; }
+
+    .preview-item input[type="checkbox"] {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      margin-top: 2px;
+      accent-color: #667eea;
+    }
+
+    .preview-num {
+      background: #e8ecf4;
+      color: #555;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .preview-name {
+      font-weight: 700;
+      color: #667eea;
+      flex-shrink: 0;
+    }
+
+    .preview-item.char-b-item .preview-name { color: #f5576c; }
+
+    .preview-text {
+      color: #333;
+      font-size: 13px;
+      line-height: 1.5;
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .style-input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 2px solid #e8e8e8;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .style-input:focus { outline: none; border-color: #667eea; }
+
+    .button-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 14px 26px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover:not(:disabled) { background: #667eea; color: white; }
+
+    .btn-combined {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+      color: white;
+      width: 100%;
+      padding: 16px 24px;
+      font-size: 16px;
+    }
+
+    .btn-combined:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(250, 112, 154, 0.4);
+    }
+
+    .merged-audio {
+      background: linear-gradient(135deg, #f0f5ff 0%, #faf5ff 100%);
+      border: 2px solid #d0deff;
+      border-radius: 18px;
+      padding: 24px;
+      text-align: center;
+      animation: fadeIn 0.4s;
+    }
+
+    .merged-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .merged-subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 16px;
+    }
+
+    .merged-player {
+      width: 100%;
+      margin-bottom: 18px;
+      height: 44px;
+    }
+
+    .status {
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin: 16px 0;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: fadeIn 0.3s;
+      font-size: 14px;
+    }
+
+    .status.loading { background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); color: #856404; }
+    .status.error { background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%); color: #721c24; }
+    .status.success { background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%); color: #155724; }
+
+    .loader {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(0,0,0,0.1);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 聊天氣泡 */
+    .results { margin-top: 20px; }
+
+    .dialogue-bubble {
+      display: flex;
+      margin-bottom: 14px;
+      animation: slideIn 0.4s;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .dialogue-bubble.right { flex-direction: row-reverse; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .bubble-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: white;
+      flex-shrink: 0;
+    }
+
+    .dialogue-bubble.left .bubble-avatar { background: linear-gradient(135deg, #667eea 0%, #4c63d2 100%); }
+    .dialogue-bubble.right .bubble-avatar { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+
+    .bubble-content {
+      max-width: calc(100% - 60px);
+      min-width: 280px;
+      flex: 1;
+    }
+
+    .bubble-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .dialogue-bubble.right .bubble-meta { justify-content: flex-end; }
+
+    .bubble-name { font-weight: 700; color: #333; font-size: 13px; }
+    .bubble-voice { color: #888; }
+
+    .bubble-body {
+      padding: 12px 16px;
+      border-radius: 16px;
+    }
+
+    .dialogue-bubble.left .bubble-body {
+      background: linear-gradient(135deg, #e8f0ff 0%, #f0f5ff 100%);
+      border: 1px solid #d0deff;
+      border-top-left-radius: 4px;
+    }
+
+    .dialogue-bubble.right .bubble-body {
+      background: linear-gradient(135deg, #ffe8f0 0%, #fff0f5 100%);
+      border: 1px solid #ffcfdf;
+      border-top-right-radius: 4px;
+    }
+
+    .bubble-text {
+      color: #333;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    .download-section { margin-top: 20px; }
+
+    @media (max-width: 700px) {
+      body { padding: 10px; }
+      .container { margin: 10px auto; border-radius: 16px; }
+      .header { padding: 28px 20px; }
+      .header h1 { font-size: 1.6em; }
+      .content { padding: 20px; }
+      .characters-grid { grid-template-columns: 1fr; }
+      .btn-primary { min-width: 100%; }
+      .bubble-content { min-width: 0; }
+      .dialogue-bubble { gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>💬 AI 雙人對話語音生成器</h1>
+      <p>上傳文本或 PDF，AI 自動生成對話，選取句子生成語音</p>
+      <span class="badge">v1.0.0 · Powered by Gemini 2.5 Flash TTS</span>
+    </div>
+
+    <div class="content">
+      <!-- API Key -->
+      <div class="api-key-section">
+        <div class="api-key-header">
+          <div class="api-key-title">🔑 Gemini API Key</div>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" class="api-key-link">📘 免費取得 API Key →</a>
+        </div>
+        <div class="api-key-input-row">
+          <input type="password" id="apiKey" class="api-key-input" placeholder="貼上你的 Gemini API Key (AIza...)" autocomplete="off">
+          <button class="toggle-visibility" id="toggleKey" title="顯示/隱藏">👁️</button>
+        </div>
+        <div class="api-key-status" id="apiKeyStatus">ℹ️ 只儲存在本機瀏覽器，不會上傳</div>
+      </div>
+
+      <!-- 文本來源 (AI 生成對話) -->
+      <div class="section-title">📖 文本來源 (AI 自動生成對話腳本)</div>
+      <div class="source-section">
+        <div class="source-tabs">
+          <button class="tab-btn active" data-tab="text">📝 輸入 / 貼上文本</button>
+          <button class="tab-btn" data-tab="pdf">📄 上傳 PDF</button>
+        </div>
+
+        <div class="tab-content active" data-content="text">
+          <textarea class="source-textarea" id="sourceText" placeholder="貼上想要介紹的文章、報告、故事等文本..."></textarea>
+        </div>
+
+        <div class="tab-content" data-content="pdf">
+          <label for="pdfFile" class="pdf-drop-zone" id="pdfDropZone">
+            <div class="icon">📄</div>
+            <div class="title">點擊選擇 PDF 或拖曳檔案到此處</div>
+            <div class="hint">支援一般 PDF 檔案，會自動萃取文字內容</div>
+            <input type="file" id="pdfFile" accept=".pdf" style="display:none;">
+          </label>
+          <div class="pdf-info" id="pdfInfo"></div>
+        </div>
+
+        <button class="btn-ai" id="generateDialogue">🤖 AI 生成雙人對話腳本</button>
+      </div>
+
+      <!-- 角色設定 -->
+      <div class="section-title">🎭 角色設定</div>
+      <div class="characters-grid">
+        <div class="character-card char-a">
+          <div class="char-avatar" id="avatarA">A</div>
+          <div class="char-field">
+            <label>角色名稱</label>
+            <input type="text" class="char-name-input" id="nameA" value="小明" maxlength="10">
+          </div>
+          <div class="char-field">
+            <label>語音音色</label>
+            <select class="char-voice-select" id="voiceA"></select>
+          </div>
+          <div class="char-preview" id="previewA"></div>
+        </div>
+
+        <div class="character-card char-b">
+          <div class="char-avatar" id="avatarB">B</div>
+          <div class="char-field">
+            <label>角色名稱</label>
+            <input type="text" class="char-name-input" id="nameB" value="小華" maxlength="10">
+          </div>
+          <div class="char-field">
+            <label>語音音色</label>
+            <select class="char-voice-select" id="voiceB"></select>
+          </div>
+          <div class="char-preview" id="previewB"></div>
+        </div>
+      </div>
+
+      <!-- 對話輸入 -->
+      <div class="input-section">
+        <div class="input-label">
+          <span>💬 對話腳本 (可手動編輯)</span>
+          <span class="counter" id="counter">0 句 · 0 字</span>
+        </div>
+        <textarea id="input" placeholder="AI 生成後會自動填入這裡，或手動輸入：&#10;&#10;小明：你好，今天過得如何？&#10;小華：不錯啊，剛從公園散步回來"></textarea>
+        <div class="format-hint">
+          💡 <strong>格式</strong>：<code>角色名：內容</code> 每行一句 ·
+          支援 <code>：</code> 或 <code>:</code> 分隔 ·
+          <button class="sample-btn" id="sampleBtn">📋 載入範例</button>
+        </div>
+
+        <!-- 選擇要生成的句子 -->
+        <div class="dialogue-preview" id="dialoguePreview"></div>
+      </div>
+
+      <!-- 風格 -->
+      <div class="input-section">
+        <div class="input-label">
+          <span>🎨 整體語氣風格 (可選)</span>
+        </div>
+        <input type="text" class="style-input" id="styleHint" placeholder="例如：輕鬆閒聊、正式對話、充滿情感">
+      </div>
+
+      <div class="button-row">
+        <button class="btn-primary" id="generate">✨ 生成對話語音</button>
+        <button class="btn-secondary" id="clear">🗑️ 清空</button>
+      </div>
+
+      <div id="status" style="display:none;"></div>
+
+      <div id="results" class="results"></div>
+      <div id="downloadSection" class="download-section"></div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // 30 個 Gemini 語音
+    // ============================================
+    const VOICES = [
+      { name: 'Zephyr',        emoji: '✨', label: '澤菲兒',     trait: '明亮', desc: '明亮清爽，像早晨的微風，適合活力朗讀' },
+      { name: 'Puck',          emoji: '🎯', label: '帕克',       trait: '活潑', desc: '活潑俏皮，適合故事、廣告、兒童內容' },
+      { name: 'Autonoe',       emoji: '☀️', label: '奧托諾埃',   trait: '明亮', desc: '陽光明亮，積極正面，適合教學、勵志' },
+      { name: 'Laomedeia',     emoji: '🎵', label: '拉俄墨狄亞', trait: '活潑', desc: '輕快上揚，適合娛樂、播客開場' },
+      { name: 'Sadachbia',     emoji: '🔥', label: '薩達赫比亞', trait: '生動', desc: '生動有力，富感染力，適合演講、宣傳' },
+      { name: 'Kore',          emoji: '🗿', label: '柯蕊',       trait: '堅定', desc: '堅定可靠的女聲，適合正式場合、公告' },
+      { name: 'Orus',          emoji: '🏛️', label: '俄洛斯',     trait: '堅定', desc: '堅實穩重的男聲，適合商業簡報' },
+      { name: 'Alnilam',       emoji: '💪', label: '艾尼蘭',     trait: '堅定', desc: '鏗鏘有力，信心十足，適合演說' },
+      { name: 'Schedar',       emoji: '⚖️', label: '謝達爾',     trait: '穩定', desc: '平穩均衡，適合長篇朗讀、有聲書' },
+      { name: 'Charon',        emoji: '📊', label: '卡戎',       trait: '資訊性', desc: '專業知性的男聲，適合新聞、紀錄片' },
+      { name: 'Rasalgethi',    emoji: '📖', label: '拉薩蓋提',   trait: '資訊性', desc: '學術感音色，適合教學、技術講解' },
+      { name: 'Sadaltager',    emoji: '🎓', label: '薩達塔格',   trait: '博學', desc: '博學深度，適合專業文件、論述' },
+      { name: 'Leda',          emoji: '🌱', label: '勒達',       trait: '年輕', desc: '年輕清新，帶點青春氣息，適合日常對話' },
+      { name: 'Achernar',      emoji: '🕊️', label: '水委一',     trait: '柔和', desc: '溫柔輕柔，適合冥想、睡前故事' },
+      { name: 'Vindemiatrix',  emoji: '🌺', label: '東上相',     trait: '溫和', desc: '溫潤如玉，親切自然，適合客服、導覽' },
+      { name: 'Sulafat',       emoji: '☕', label: '蘇拉法特',   trait: '溫暖', desc: '溫暖醇厚，適合詩歌、情感內容' },
+      { name: 'Achird',        emoji: '🤝', label: '天鉤五',     trait: '友善', desc: '友善親和，帶笑意，適合問候對話' },
+      { name: 'Algieba',       emoji: '🎭', label: '軒轅十二',   trait: '平滑', desc: '絲滑流暢，音質細膩，適合配音、旁白' },
+      { name: 'Despina',       emoji: '🎶', label: '狄絲琵娜',   trait: '平滑', desc: '圓潤順暢，如歌般悅耳，適合藝術朗讀' },
+      { name: 'Iapetus',       emoji: '💧', label: '伊阿珀托斯', trait: '清晰', desc: '清澈分明，發音精準，適合語言教學' },
+      { name: 'Erinome',       emoji: '❄️', label: '厄里諾墨',   trait: '清晰', desc: '水晶般透亮的女聲，適合報導播報' },
+      { name: 'Aoede',         emoji: '🌊', label: '阿俄得',     trait: '輕快', desc: '輕快愉悅，自然不做作，適合 Vlog' },
+      { name: 'Callirrhoe',    emoji: '🌿', label: '卡利羅伊',   trait: '隨和', desc: '隨和舒適，沒有距離感，適合閒聊' },
+      { name: 'Umbriel',       emoji: '🍀', label: '溫布利爾',   trait: '隨和', desc: '輕鬆自在的男聲，適合播客閒聊' },
+      { name: 'Zubenelgenubi', emoji: '🎪', label: '氐宿一',     trait: '隨性', desc: '隨性不拘，帶點玩味，適合脫口秀' },
+      { name: 'Fenrir',        emoji: '⚡', label: '芬里爾',     trait: '興奮', desc: '興奮激昂的男聲，適合體育、熱血場面' },
+      { name: 'Enceladus',     emoji: '🌫️', label: '恩克拉多斯', trait: '氣息', desc: '帶氣音的低語感，適合 ASMR、懸疑故事' },
+      { name: 'Algenib',       emoji: '🪨', label: '軍市一',     trait: '沙啞', desc: '略帶沙啞質感，適合電影獨白、旁白' },
+      { name: 'Gacrux',        emoji: '🌰', label: '十字架三',   trait: '成熟', desc: '成熟穩重的中年感，適合回憶、敘事' },
+      { name: 'Pulcherrima',   emoji: '🌟', label: '北落師門',   trait: '前衛', desc: '前衛獨特，個性鮮明，適合創意內容' }
+    ];
+
+    const VOICE_GROUPS = {
+      '🌟 明亮活潑': ['Zephyr','Puck','Autonoe','Laomedeia','Sadachbia'],
+      '🛡️ 穩重堅定': ['Kore','Orus','Alnilam','Schedar'],
+      '📚 專業資訊': ['Charon','Rasalgethi','Sadaltager'],
+      '🌸 溫柔友善': ['Leda','Achernar','Vindemiatrix','Sulafat','Achird'],
+      '💎 平滑清晰': ['Algieba','Despina','Iapetus','Erinome'],
+      '🍃 隨性輕鬆': ['Aoede','Callirrhoe','Umbriel','Zubenelgenubi'],
+      '🎨 獨特風格': ['Fenrir','Enceladus','Algenib','Gacrux','Pulcherrima']
+    };
+
+    const el = (id) => document.getElementById(id);
+    const elements = {
+      input: el('input'),
+      voiceA: el('voiceA'),
+      voiceB: el('voiceB'),
+      nameA: el('nameA'),
+      nameB: el('nameB'),
+      avatarA: el('avatarA'),
+      avatarB: el('avatarB'),
+      previewA: el('previewA'),
+      previewB: el('previewB'),
+      styleHint: el('styleHint'),
+      generate: el('generate'),
+      clear: el('clear'),
+      results: el('results'),
+      downloadSection: el('downloadSection'),
+      status: el('status'),
+      counter: el('counter'),
+      apiKey: el('apiKey'),
+      toggleKey: el('toggleKey'),
+      apiKeyStatus: el('apiKeyStatus'),
+      sampleBtn: el('sampleBtn'),
+      sourceText: el('sourceText'),
+      pdfFile: el('pdfFile'),
+      pdfDropZone: el('pdfDropZone'),
+      pdfInfo: el('pdfInfo'),
+      generateDialogue: el('generateDialogue'),
+      dialoguePreview: el('dialoguePreview')
+    };
+
+    let generatedItems = [];
+    let extractedPdfText = '';
+
+    // ============================================
+    // 初始化語音選單
+    // ============================================
+    function initVoiceSelect(selectEl, defaultVoice) {
+      Object.entries(VOICE_GROUPS).forEach(([groupName, voiceNames]) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = groupName;
+        voiceNames.forEach(vn => {
+          const voice = VOICES.find(v => v.name === vn);
+          if (!voice) return;
+          const opt = document.createElement('option');
+          opt.value = voice.name;
+          opt.textContent = `${voice.emoji} ${voice.label} — ${voice.trait}`;
+          if (voice.name === defaultVoice) opt.selected = true;
+          optgroup.appendChild(opt);
+        });
+        selectEl.appendChild(optgroup);
+      });
+    }
+
+    initVoiceSelect(elements.voiceA, 'Charon');
+    initVoiceSelect(elements.voiceB, 'Leda');
+
+    function updatePreview(selectEl, previewEl) {
+      const voice = VOICES.find(v => v.name === selectEl.value);
+      if (voice) {
+        previewEl.innerHTML = `<strong>${voice.emoji} ${voice.label}</strong> · <span style="color:#888">${voice.trait}</span><br><span style="color:#666">${voice.desc}</span>`;
+      }
+    }
+
+    function updateAvatars() {
+      const nameA = elements.nameA.value.trim() || 'A';
+      const nameB = elements.nameB.value.trim() || 'B';
+      elements.avatarA.textContent = nameA.charAt(0);
+      elements.avatarB.textContent = nameB.charAt(0);
+    }
+
+    elements.voiceA.addEventListener('change', () => updatePreview(elements.voiceA, elements.previewA));
+    elements.voiceB.addEventListener('change', () => updatePreview(elements.voiceB, elements.previewB));
+    elements.nameA.addEventListener('input', () => { updateAvatars(); updateDialoguePreview(); });
+    elements.nameB.addEventListener('input', () => { updateAvatars(); updateDialoguePreview(); });
+
+    updatePreview(elements.voiceA, elements.previewA);
+    updatePreview(elements.voiceB, elements.previewB);
+    updateAvatars();
+
+    // ============================================
+    // API Key
+    // ============================================
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+      elements.apiKey.value = savedKey;
+      elements.apiKeyStatus.innerHTML = '✅ 已從瀏覽器載入儲存的 API Key';
+      elements.apiKeyStatus.classList.add('saved');
+    }
+
+    elements.apiKey.addEventListener('input', () => {
+      const key = elements.apiKey.value.trim();
+      if (key) {
+        localStorage.setItem('gemini_api_key', key);
+        elements.apiKeyStatus.innerHTML = '✅ API Key 已自動儲存到本機瀏覽器';
+        elements.apiKeyStatus.classList.add('saved');
+      } else {
+        localStorage.removeItem('gemini_api_key');
+        elements.apiKeyStatus.innerHTML = 'ℹ️ 只儲存在本機瀏覽器，不會上傳';
+        elements.apiKeyStatus.classList.remove('saved');
+      }
+    });
+
+    elements.toggleKey.addEventListener('click', () => {
+      const isPw = elements.apiKey.type === 'password';
+      elements.apiKey.type = isPw ? 'text' : 'password';
+      elements.toggleKey.textContent = isPw ? '🙈' : '👁️';
+    });
+
+    // ============================================
+    // Tabs 切換
+    // ============================================
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.dataset.content === tab));
+      });
+    });
+
+    // ============================================
+    // PDF 上傳與解析
+    // ============================================
+    async function extractPdfText(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(item => item.str).join(' ');
+        text += pageText + '\n\n';
+      }
+      return text.trim();
+    }
+
+    async function handlePdfFile(file) {
+      if (!file || file.type !== 'application/pdf') {
+        showStatus('error', '❌ 請選擇有效的 PDF 檔案');
+        return;
+      }
+
+      elements.pdfInfo.classList.add('show');
+      elements.pdfInfo.innerHTML = `<div class="loader" style="display:inline-block;vertical-align:middle;margin-right:8px;"></div>正在解析 PDF：${file.name}...`;
+
+      try {
+        extractedPdfText = await extractPdfText(file);
+        const charCount = extractedPdfText.length;
+        const preview = extractedPdfText.substring(0, 150) + (charCount > 150 ? '...' : '');
+        elements.pdfInfo.innerHTML = `✅ <strong>${file.name}</strong> 已解析完成<br>📝 共 ${charCount.toLocaleString()} 字<br><span style="color:#666;font-size:12px;">${escapeHtml(preview)}</span>`;
+      } catch (err) {
+        console.error(err);
+        elements.pdfInfo.innerHTML = `❌ PDF 解析失敗：${err.message}`;
+        extractedPdfText = '';
+      }
+    }
+
+    elements.pdfFile.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) handlePdfFile(file);
+    });
+
+    elements.pdfDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      elements.pdfDropZone.classList.add('drag-over');
+    });
+
+    elements.pdfDropZone.addEventListener('dragleave', () => {
+      elements.pdfDropZone.classList.remove('drag-over');
+    });
+
+    elements.pdfDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      elements.pdfDropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handlePdfFile(file);
+    });
+
+    // ============================================
+    // AI 生成對話腳本
+    // ============================================
+    async function generateDialogueScript(sourceText, apiKey, nameA, nameB) {
+      const prompt = `你是一個專業的對話腳本家。請根據以下文本內容，創作一段自然生動的繁體中文對話，由 ${nameA} 和 ${nameB} 兩個角色交替發言，用閒聊問答的方式介紹這篇文本的重點。
+
+輸出規則（非常重要）：
+1. 每一行格式嚴格為：「${nameA}：內容」或「${nameB}：內容」，用全形冒號「：」
+2. 兩個角色輪流發言，不要連續同一個人
+3. 對話要自然、口語化，像朋友聊天
+4. 涵蓋文本的主要觀點、有趣細節、重要結論
+5. 總共輸出 10-16 句對話，內容要豐富
+6. 不要加入任何標題、編號、引言或說明文字
+7. 只輸出對話內容，一句一行
+
+【文本內容】
+${sourceText}`;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.85,
+            maxOutputTokens: 4096
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = `HTTP ${response.status}`;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error?.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('AI 未回傳內容');
+      return text.trim();
+    }
+
+    elements.generateDialogue.addEventListener('click', async () => {
+      const apiKey = elements.apiKey.value.trim();
+      if (!apiKey) {
+        showStatus('error', '❌ 請先輸入 Gemini API Key');
+        elements.apiKey.focus();
+        return;
+      }
+
+      const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+      let sourceContent = '';
+
+      if (activeTab === 'text') {
+        sourceContent = elements.sourceText.value.trim();
+        if (!sourceContent) {
+          showStatus('error', '❌ 請輸入或貼上文本內容');
+          return;
+        }
+      } else {
+        sourceContent = extractedPdfText.trim();
+        if (!sourceContent) {
+          showStatus('error', '❌ 請先上傳並解析 PDF 檔案');
+          return;
+        }
+      }
+
+      const nameA = elements.nameA.value.trim() || '小明';
+      const nameB = elements.nameB.value.trim() || '小華';
+
+      elements.generateDialogue.disabled = true;
+      elements.generateDialogue.innerHTML = '<div class="loader"></div> AI 思考中...';
+      showStatus('loading', '🤖 AI 正在根據文本生成對話腳本，請稍候...');
+
+      try {
+        const dialogue = await generateDialogueScript(sourceContent, apiKey, nameA, nameB);
+        elements.input.value = dialogue;
+        updateCounter();
+        updateDialoguePreview();
+        showStatus('success', `✅ 對話腳本已生成！可以在下方編輯或直接生成語音`);
+        elements.input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (err) {
+        console.error('生成對話失敗:', err);
+        showStatus('error', `❌ 生成對話失敗：${err.message}`);
+      } finally {
+        elements.generateDialogue.disabled = false;
+        elements.generateDialogue.innerHTML = '🤖 AI 生成雙人對話腳本';
+      }
+    });
+
+    // ============================================
+    // 字數統計
+    // ============================================
+    elements.input.addEventListener('input', () => {
+      updateCounter();
+      updateDialoguePreview();
+    });
+
+    function updateCounter() {
+      const text = elements.input.value;
+      const lines = text.split('\n').filter(l => l.trim().length > 0).length;
+      const chars = text.length;
+      elements.counter.textContent = `${lines} 句 · ${chars} 字`;
+    }
+
+    // ============================================
+    // 範例對話
+    // ============================================
+    elements.sampleBtn.addEventListener('click', () => {
+      const nameA = elements.nameA.value.trim() || '小明';
+      const nameB = elements.nameB.value.trim() || '小華';
+      elements.input.value =
+`${nameA}：你好，今天過得怎麼樣？
+${nameB}：不錯啊，剛從公園散步回來，心情很放鬆
+${nameA}：這麼好的天氣，真的很適合出去走走
+${nameB}：對啊，下次一起去吧！
+${nameA}：好啊，我們約這週末如何？
+${nameB}：沒問題，就這麼說定了！`;
+      updateCounter();
+      updateDialoguePreview();
+    });
+
+    // ============================================
+    // 狀態
+    // ============================================
+    function showStatus(type, message) {
+      elements.status.style.display = 'flex';
+      elements.status.className = `status ${type}`;
+      if (type === 'loading') {
+        elements.status.innerHTML = `<div class="loader"></div><span>${message}</span>`;
+      } else {
+        elements.status.innerHTML = `<span>${message}</span>`;
+      }
+    }
+
+    function hideStatus() { elements.status.style.display = 'none'; }
+
+    // ============================================
+    // 對話解析
+    // ============================================
+    function parseDialogue(text, nameA, nameB) {
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const result = [];
+
+      for (const line of lines) {
+        const match = line.match(/^([^:：]{1,15})\s*[:：]\s*(.+)$/);
+        if (match) {
+          const prefix = match[1].trim();
+          const content = match[2].trim();
+          if (prefix === nameA || prefix.toUpperCase() === 'A') {
+            result.push({ speaker: 'A', name: nameA, text: content });
+          } else if (prefix === nameB || prefix.toUpperCase() === 'B') {
+            result.push({ speaker: 'B', name: nameB, text: content });
+          } else {
+            result.push({ speaker: 'A', name: nameA, text: line });
+          }
+        } else {
+          result.push({ speaker: 'A', name: nameA, text: line });
+        }
+      }
+      return result;
+    }
+
+    // ============================================
+    // 對話預覽 (勾選框)
+    // ============================================
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function updateDialoguePreview() {
+      const text = elements.input.value.trim();
+      const nameA = elements.nameA.value.trim() || '角色A';
+      const nameB = elements.nameB.value.trim() || '角色B';
+      const parsed = parseDialogue(text, nameA, nameB);
+
+      if (parsed.length === 0) {
+        elements.dialoguePreview.classList.remove('show');
+        elements.dialoguePreview.innerHTML = '';
+        updateGenerateButton(0, 0);
+        return;
+      }
+
+      let html = `
+        <div class="preview-header">
+          <div class="preview-title">✅ 選擇要生成語音的句子<span class="count-badge" id="selectCountBadge">${parsed.length}/${parsed.length}</span></div>
+          <div class="preview-controls">
+            <button type="button" class="btn-mini" data-action="all">全選</button>
+            <button type="button" class="btn-mini" data-action="none">全不選</button>
+            <button type="button" class="btn-mini" data-action="a-only">只選${escapeHtml(nameA)}</button>
+            <button type="button" class="btn-mini" data-action="b-only">只選${escapeHtml(nameB)}</button>
+          </div>
+        </div>
+        <div class="preview-list">
+      `;
+
+      parsed.forEach((item, i) => {
+        const isB = item.speaker === 'B';
+        html += `
+          <label class="preview-item ${isB ? 'char-b-item' : 'char-a-item'}">
+            <input type="checkbox" class="line-check" data-index="${i}" checked>
+            <span class="preview-num">${i + 1}</span>
+            <span class="preview-name">${escapeHtml(item.name)}：</span>
+            <span class="preview-text">${escapeHtml(item.text)}</span>
+          </label>
+        `;
+      });
+      html += '</div>';
+
+      elements.dialoguePreview.innerHTML = html;
+      elements.dialoguePreview.classList.add('show');
+
+      // 勾選事件
+      document.querySelectorAll('.line-check').forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+      });
+
+      // 快速選擇按鈕
+      document.querySelectorAll('.preview-controls [data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const action = btn.dataset.action;
+          document.querySelectorAll('.line-check').forEach(cb => {
+            const idx = parseInt(cb.dataset.index);
+            const speaker = parsed[idx].speaker;
+            if (action === 'all') cb.checked = true;
+            else if (action === 'none') cb.checked = false;
+            else if (action === 'a-only') cb.checked = speaker === 'A';
+            else if (action === 'b-only') cb.checked = speaker === 'B';
+          });
+          updateSelectedCount();
+        });
+      });
+
+      updateSelectedCount();
+    }
+
+    function updateSelectedCount() {
+      const all = document.querySelectorAll('.line-check');
+      const selected = document.querySelectorAll('.line-check:checked');
+      const badge = document.getElementById('selectCountBadge');
+      if (badge) badge.textContent = `${selected.length}/${all.length}`;
+      updateGenerateButton(selected.length, all.length);
+    }
+
+    function updateGenerateButton(selected, total) {
+      if (total === 0) {
+        elements.generate.innerHTML = '✨ 生成對話語音';
+        elements.generate.disabled = false;
+      } else if (selected === 0) {
+        elements.generate.innerHTML = '⚠️ 請至少選一句';
+        elements.generate.disabled = true;
+      } else if (selected === total) {
+        elements.generate.innerHTML = `✨ 生成全部 ${total} 句語音`;
+        elements.generate.disabled = false;
+      } else {
+        elements.generate.innerHTML = `✨ 生成選中的 ${selected}/${total} 句`;
+        elements.generate.disabled = false;
+      }
+    }
+
+    // ============================================
+    // PCM ↔ WAV
+    // ============================================
+    function base64ToUint8Array(base64) {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function pcmToWav(pcmData, sampleRate = 24000) {
+      const numChannels = 1, bitsPerSample = 16;
+      const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+      const blockAlign = numChannels * bitsPerSample / 8;
+      const dataSize = pcmData.length;
+      const buffer = new ArrayBuffer(44 + dataSize);
+      const view = new DataView(buffer);
+      const writeStr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+      writeStr(0, 'RIFF');
+      view.setUint32(4, 36 + dataSize, true);
+      writeStr(8, 'WAVE');
+      writeStr(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, byteRate, true);
+      view.setUint16(32, blockAlign, true);
+      view.setUint16(34, bitsPerSample, true);
+      writeStr(36, 'data');
+      view.setUint32(40, dataSize, true);
+      new Uint8Array(buffer, 44).set(pcmData);
+      return { blob: new Blob([buffer], { type: 'audio/wav' }), pcm: pcmData };
+    }
+
+    function mergePcmToWav(pcmArray, sampleRate = 24000) {
+      const silenceBytes = Math.floor(sampleRate * 0.4) * 2;
+      const silence = new Uint8Array(silenceBytes);
+      let totalSize = 0;
+      pcmArray.forEach((pcm, i) => {
+        totalSize += pcm.length;
+        if (i < pcmArray.length - 1) totalSize += silenceBytes;
+      });
+      const merged = new Uint8Array(totalSize);
+      let offset = 0;
+      pcmArray.forEach((pcm, i) => {
+        merged.set(pcm, offset);
+        offset += pcm.length;
+        if (i < pcmArray.length - 1) {
+          merged.set(silence, offset);
+          offset += silenceBytes;
+        }
+      });
+      return pcmToWav(merged, sampleRate).blob;
+    }
+
+    // ============================================
+    // Gemini TTS 呼叫
+    // ============================================
+    async function generateSpeech(text, voice, apiKey, styleHint) {
+      const finalText = styleHint ? `請用「${styleHint}」的語氣說：${text}` : text;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const body = {
+        contents: [{ parts: [{ text: finalText }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } }
+          }
+        }
+      };
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        let errMsg = `HTTP ${response.status}`;
+        try {
+          const errJson = JSON.parse(errText);
+          errMsg = errJson.error?.message || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+      const data = await response.json();
+      const part = data?.candidates?.[0]?.content?.parts?.[0];
+      if (!part?.inlineData?.data) throw new Error('API 未回傳音訊資料');
+      return pcmToWav(base64ToUint8Array(part.inlineData.data), 24000);
+    }
+
+    // ============================================
+    // 下載
+    // ============================================
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+
+    // ============================================
+    // 顯示氣泡
+    // ============================================
+    function createBubble(item) {
+      const isB = item.speaker === 'B';
+      const voice = VOICES.find(v => v.name === item.voice);
+      const avatarChar = (item.name || (isB ? 'B' : 'A')).charAt(0);
+      const bubble = document.createElement('div');
+      bubble.className = `dialogue-bubble ${isB ? 'right' : 'left'}`;
+      bubble.innerHTML = `
+        <div class="bubble-avatar">${escapeHtml(avatarChar)}</div>
+        <div class="bubble-content">
+          <div class="bubble-meta">
+            <span class="bubble-name">${escapeHtml(item.name)}</span>
+            <span class="bubble-voice">${voice ? voice.emoji + ' ' + voice.label : item.voice}</span>
+          </div>
+          <div class="bubble-body">
+            <div class="bubble-text">${escapeHtml(item.text)}</div>
+          </div>
+        </div>
+      `;
+      return bubble;
+    }
+
+    // ============================================
+    // 主要生成邏輯
+    // ============================================
+    elements.generate.addEventListener('click', async () => {
+      const apiKey = elements.apiKey.value.trim();
+      if (!apiKey) {
+        showStatus('error', '❌ 請先輸入 Gemini API Key');
+        elements.apiKey.focus();
+        return;
+      }
+
+      const text = elements.input.value.trim();
+      if (!text) {
+        showStatus('error', '❌ 請輸入對話內容');
+        return;
+      }
+
+      const nameA = elements.nameA.value.trim() || '角色A';
+      const nameB = elements.nameB.value.trim() || '角色B';
+      const voiceA = elements.voiceA.value;
+      const voiceB = elements.voiceB.value;
+      const styleHint = elements.styleHint.value.trim();
+
+      const parsed = parseDialogue(text, nameA, nameB);
+      if (parsed.length === 0) {
+        showStatus('error', '❌ 對話內容解析失敗');
+        return;
+      }
+
+      // 篩選已勾選的句子
+      const selectedIndices = [];
+      document.querySelectorAll('.line-check').forEach(cb => {
+        if (cb.checked) selectedIndices.push(parseInt(cb.dataset.index));
+      });
+
+      if (selectedIndices.length === 0) {
+        showStatus('error', '❌ 請至少勾選一句對話');
+        return;
+      }
+
+      const selectedLines = selectedIndices.map(i => parsed[i]);
+
+      elements.results.innerHTML = '';
+      elements.downloadSection.innerHTML = '';
+      generatedItems = [];
+      elements.generate.disabled = true;
+
+      for (let i = 0; i < selectedLines.length; i++) {
+        const item = selectedLines[i];
+        const voice = item.speaker === 'A' ? voiceA : voiceB;
+        item.voice = voice;
+
+        const preview = item.text.substring(0, 18) + (item.text.length > 18 ? '...' : '');
+        showStatus('loading', `正在生成第 ${i + 1}/${selectedLines.length} 句 — ${escapeHtml(item.name)}：${escapeHtml(preview)}`);
+
+        try {
+          const { pcm } = await generateSpeech(item.text, voice, apiKey, styleHint);
+          generatedItems.push({ ...item, pcm });
+          const bubble = createBubble(item);
+          elements.results.appendChild(bubble);
+        } catch (err) {
+          console.error('生成失敗:', err);
+          showStatus('error', `❌ 第 ${i + 1} 句生成失敗：${err.message}`);
+          elements.generate.disabled = false;
+          return;
+        }
+      }
+
+      // 自動合併
+      showStatus('loading', '正在合併為完整對話音檔...');
+      const pcmArray = generatedItems.map(g => g.pcm);
+      const mergedBlob = mergePcmToWav(pcmArray, 24000);
+      const mergedUrl = URL.createObjectURL(mergedBlob);
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const mergedFilename = `dialogue_${timestamp}.wav`;
+
+      elements.downloadSection.innerHTML = `
+        <div class="merged-audio">
+          <div class="merged-title">🎬 完整對話音檔</div>
+          <div class="merged-subtitle">${selectedLines.length} 句對話已合併（句間含 0.4 秒停頓）</div>
+          <audio controls src="${mergedUrl}" class="merged-player"></audio>
+          <button class="btn-combined" id="downloadMerged">⬇️ 下載完整對話 (WAV)</button>
+        </div>
+      `;
+      document.getElementById('downloadMerged').addEventListener('click', () => {
+        downloadBlob(mergedBlob, mergedFilename);
+      });
+
+      showStatus('success', `✅ 成功生成 ${selectedLines.length} 句對話並合併為單一音檔！`);
+      elements.downloadSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      updateSelectedCount();
+    });
+
+    elements.clear.addEventListener('click', () => {
+      elements.input.value = '';
+      elements.styleHint.value = '';
+      elements.sourceText.value = '';
+      elements.results.innerHTML = '';
+      elements.downloadSection.innerHTML = '';
+      elements.dialoguePreview.innerHTML = '';
+      elements.dialoguePreview.classList.remove('show');
+      elements.pdfInfo.classList.remove('show');
+      elements.pdfFile.value = '';
+      extractedPdfText = '';
+      generatedItems = [];
+      hideStatus();
+      updateCounter();
+      updateGenerateButton(0, 0);
+      elements.sourceText.focus();
+    });
+
+    elements.input.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        elements.generate.click();
+      }
+    });
+
+    updateCounter();
+    updateDialoguePreview();
+  </script>
+</body>
+</html>
