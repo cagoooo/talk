@@ -6,6 +6,8 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Language](https://img.shields.io/badge/language-繁體中文-red)
 
+🌐 **線上使用**：**https://cagoooo.github.io/talk/** （無需安裝，點開即可使用）
+
 ---
 
 ## ✨ 功能特色
